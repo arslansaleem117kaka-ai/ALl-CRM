@@ -6,10 +6,12 @@ import {
   localDayKey,
   mondayIndex,
   startOfLocalDay,
+  startOfLocalMonth,
 } from './date-utils'
 import type {
   ActivityItem,
   ConversationsSeriesPoint,
+  FreeServiceUsage,
   MetricsBundle,
   PipelineDonutData,
   PipelineStageSlice,
@@ -96,6 +98,42 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       current: messagesToday.count ?? 0,
       previous: messagesYesterday.count ?? 0,
     },
+  }
+}
+
+// --- 1b. Free-service message usage ------------------------------------
+
+/**
+ * Count the outgoing, non-template messages sent in the current local
+ * month. Template messages are excluded because they are billed as
+ * marketing/utility; agent + bot free-form replies are what count as
+ * free service messages.
+ *
+ * A manual reset is device-scoped (localStorage) until the schema grows
+ * a persisted reset column, so `resetAt` is passed in by the caller.
+ */
+export async function loadFreeServiceUsage(
+  db: DB,
+  resetAt: Date | null = null,
+): Promise<FreeServiceUsage> {
+  const monthStart = startOfLocalMonth()
+  const effectiveStart =
+    resetAt && resetAt.getTime() > monthStart.getTime() ? resetAt : monthStart
+
+  const { count, error } = await db
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .in('sender_type', ['agent', 'bot'])
+    .neq('content_type', 'template')
+    .gte('created_at', effectiveStart.toISOString())
+
+  if (error) throw error
+
+  return {
+    count: count ?? 0,
+    since: effectiveStart.toISOString(),
+    monthStart: monthStart.toISOString(),
+    reset: effectiveStart.getTime() !== monthStart.getTime(),
   }
 }
 

@@ -15,6 +15,17 @@ export interface MetricsBundle {
   messagesSentToday: MetricDelta
 }
 
+export interface FreeServiceUsage {
+  /** Outgoing non-template messages counted since `since`. */
+  count: number
+  /** Effective start of the counting window (ISO timestamp). */
+  since: string
+  /** Local start of the current month (ISO timestamp). */
+  monthStart: string
+  /** True when `since` came from a manual reset rather than the month. */
+  reset: boolean
+}
+
 export interface ConversationsSeriesPoint {
   day: string // YYYY-MM-DD local
   incoming: number

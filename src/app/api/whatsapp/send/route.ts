@@ -11,6 +11,7 @@ import {
   validateSendMessageParams,
   SendMessageError,
 } from '@/lib/whatsapp/send-message'
+import { isBlockedTagName } from '@/lib/contacts/blocked'
 
 // The dashboard's outbound-send endpoint. It owns auth, per-user rate
 // limiting, and the two ways the UI targets a thread — an existing
@@ -93,11 +94,12 @@ export async function POST(request: Request) {
     // contact so a business-initiated template send (Contact detail view)
     // reuses the shared send core below.
     let conversationId: string | null = null
+    let contactId: string | null = null
 
     if (conversationIdInput) {
       const { data, error: convError } = await supabase
         .from('conversations')
-        .select('id')
+        .select('id, contact_id')
         .eq('id', conversationIdInput)
         .eq('account_id', accountId)
         .single()
@@ -109,6 +111,7 @@ export async function POST(request: Request) {
         )
       }
       conversationId = data.id
+      contactId = data.contact_id
     } else {
       // contact_id path: verify the contact is in this account first so a
       // caller can't open a conversation against someone else's contact.
@@ -125,6 +128,7 @@ export async function POST(request: Request) {
           { status: 404 }
         )
       }
+      contactId = contact_id
 
       const resolved = await findOrCreateConversation(
         supabase,
@@ -146,6 +150,35 @@ export async function POST(request: Request) {
         { error: 'Conversation not found' },
         { status: 404 }
       )
+    }
+
+    // Blocked contacts stay in the inbox for history but must never
+    // receive an outgoing message. Checked here (before Meta) so a
+    // blocked send can't slip through as "delivered but unsaved".
+    if (contactId) {
+      const { data: tagRows } = await supabase
+        .from('contact_tags')
+        .select('tags(name)')
+        .eq('contact_id', contactId)
+
+      const blocked = (
+        (tagRows ?? []) as Array<{
+          tags: { name: string }[] | { name: string } | null
+        }>
+      ).some((row) => {
+        const tag = Array.isArray(row.tags) ? row.tags[0] : row.tags
+        return isBlockedTagName(tag?.name)
+      })
+
+      if (blocked) {
+        return NextResponse.json(
+          {
+            error:
+              'This contact is blocked. Unblock them before sending messages.',
+          },
+          { status: 409 }
+        )
+      }
     }
 
     // Delegate to the shared send core (validates, sends to Meta with

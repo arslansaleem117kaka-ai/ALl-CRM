@@ -9,10 +9,27 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import {
+  Search,
+  ChevronDown,
+  X,
+  Check,
+  CheckSquare,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -34,6 +51,12 @@ interface ConversationListProps {
    * or the tab was throttled. Optional so existing callers keep working.
    */
   resyncToken?: number;
+  /**
+   * Fired after a bulk delete succeeds so the page can clear the active
+   * thread if it was among the deleted conversations and resync other
+   * panes. Optional so existing callers keep working.
+   */
+  onConversationsDeleted?: (ids: string[]) => void;
 }
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
@@ -52,6 +75,7 @@ export function ConversationList({
   conversations,
   onConversationsLoaded,
   resyncToken = 0,
+  onConversationsDeleted,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
   
@@ -72,6 +96,15 @@ export function ConversationList({
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+
+  // Bulk delete: selection mode is scoped to the currently filtered rows.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Local refetch trigger after a delete, in addition to the parent's
+  // resyncToken (which may not change if the parent chooses not to bump).
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   // Keep the latest callback in a ref so the fetch effect below can
   // have a stable, empty-dep identity. Previously the fetch useCallback
@@ -124,7 +157,8 @@ export function ConversationList({
     // `resyncToken` is included so the parent can force a refetch when
     // the realtime channel reconnects or the tab regains focus — catches
     // up on any events sent while the WS was disconnected or throttled.
-  }, [resyncToken]);
+    // `refreshNonce` refetches immediately after our own bulk delete.
+  }, [resyncToken, refreshNonce]);
 
   // Tag definitions for the filter picker — loaded once so labels/colours
   // stay stable regardless of which conversations happen to be loaded.
@@ -202,6 +236,68 @@ export function ConversationList({
   }, []);
 
   const hasContactFilters = selectedTagIds.length > 0 || selectedCompany !== null;
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((c) => selected.has(c.id));
+
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((prev) => !prev);
+    setSelected(new Set());
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (filtered.length > 0 && filtered.every((c) => next.has(c.id))) {
+        filtered.forEach((c) => next.delete(c.id));
+      } else {
+        filtered.forEach((c) => next.add(c.id));
+      }
+      return next;
+    });
+  }, [filtered]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selected.size === 0 || bulkDeleting) return;
+    const ids = [...selected];
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/inbox/conversations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || `HTTP ${res.status}`);
+      }
+      const deletedIds: string[] = Array.isArray(payload?.ids)
+        ? payload.ids
+        : ids;
+      toast.success(
+        t("toastBulkDeleted", { count: payload?.deleted ?? deletedIds.length }),
+      );
+      setSelected(new Set());
+      setSelectMode(false);
+      setBulkDeleteOpen(false);
+      onConversationsDeleted?.(deletedIds);
+      setRefreshNonce((n) => n + 1);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "network error";
+      toast.error(t("toastBulkDeleteFailed", { reason }));
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [selected, bulkDeleting, t, onConversationsDeleted]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -352,6 +448,44 @@ export function ConversationList({
           )}
         </div>
 
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            onClick={toggleSelectMode}
+            className={cn(
+              "inline-flex items-center justify-center gap-1 rounded-md px-2 h-7 text-xs hover:bg-muted",
+              selectMode
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <CheckSquare className="h-3.5 w-3.5" />
+            {selectMode ? t("cancelSelection") : t("selectChats")}
+          </button>
+
+          {selectMode && (
+            <>
+              <button
+                onClick={toggleSelectAll}
+                disabled={filtered.length === 0}
+                className="inline-flex items-center justify-center rounded-md px-2 h-7 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {allFilteredSelected ? t("clearSelection") : t("selectAll")}
+              </button>
+              <span className="text-[11px] text-muted-foreground">
+                {t("selectedCount", { count: selected.size })}
+              </span>
+              <button
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={selected.size === 0}
+                className="ml-auto inline-flex items-center justify-center gap-1 rounded-md px-2 h-7 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {t("deleteSelected")}
+              </button>
+            </>
+          )}
+        </div>
+
         {hasContactFilters && (
           <div className="flex flex-wrap items-center gap-1">
             {selectedTagIds.map((id) => {
@@ -413,12 +547,45 @@ export function ConversationList({
                 conversation={conv}
                 isActive={conv.id === activeConversationId}
                 onSelect={handleSelect}
+                selectMode={selectMode}
+                selected={selected.has(conv.id)}
+                onToggleSelect={toggleSelect}
                 t={t}
               />
             ))}
           </div>
         )}
       </ScrollArea>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("deleteBulkTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("deleteBulkDesc", { count: selected.size })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(false)}
+              disabled={bulkDeleting}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-destructive px-3 text-sm text-white hover:bg-destructive/90 disabled:opacity-50"
+            >
+              {bulkDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t("deleteSelected")}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -432,6 +599,9 @@ interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   t: ReturnType<typeof useTranslations>;
 }
 
@@ -455,6 +625,9 @@ function ConversationItem({
   conversation,
   isActive,
   onSelect,
+  selectMode,
+  selected,
+  onToggleSelect,
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
@@ -465,8 +638,9 @@ function ConversationItem({
   const overflowTagCount = Math.max(0, assignedTags.length - MAX_INLINE_TAGS);
 
   const handleClick = useCallback(() => {
-    onSelect(conversation);
-  }, [onSelect, conversation]);
+    if (selectMode) onToggleSelect(conversation.id);
+    else onSelect(conversation);
+  }, [onSelect, conversation, selectMode, onToggleSelect]);
 
   const timeAgo = conversation.last_message_at
     ? formatDistanceToNow(new Date(conversation.last_message_at), {
@@ -477,11 +651,26 @@ function ConversationItem({
   return (
     <button
       onClick={handleClick}
+      aria-pressed={selectMode ? selected : undefined}
       className={cn(
         "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70"
+        isActive && "border-l-2 border-primary bg-muted/70",
+        selectMode && selected && "bg-primary/5"
       )}
     >
+      {selectMode && (
+        <span
+          aria-hidden
+          className={cn(
+            "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+            selected
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-input bg-card"
+          )}
+        >
+          {selected && <Check className="h-3 w-3" />}
+        </span>
+      )}
       {/* Avatar */}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
         {contact?.avatar_url ? (

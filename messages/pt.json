@@ -132,6 +132,14 @@
     },
     "emptyState": {
       "title": "Ainda não há dados suficientes"
+    },
+    "freeService": {
+      "title": "Mensagens de serviço gratuitas",
+      "subtitle": "Mensagens enviadas sem modelo desde {date}",
+      "reset": "Reiniciar contador",
+      "resetSuccess": "Contador reiniciado",
+      "customWindow": "Início personalizado",
+      "loadError": "Não foi possível carregar a contagem de mensagens."
     }
   },
   "Inbox": {
@@ -151,7 +159,18 @@
       "clearAll": "Limpar tudo",
       "noConversations": "Nenhuma conversa encontrada",
       "noMessagesYet": "Nenhuma mensagem ainda",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "selectChats": "Selecionar conversas",
+      "cancelSelection": "Cancelar seleção",
+      "selectAll": "Selecionar todas",
+      "clearSelection": "Limpar seleção",
+      "selectedCount": "Selecionadas: {count}",
+      "deleteSelected": "Excluir selecionadas",
+      "deleteBulkTitle": "Excluir as conversas selecionadas?",
+      "deleteBulkDesc": "Isso exclui permanentemente {count} conversas e todas as mensagens. Os contatos são mantidos.",
+      "cancel": "Cancelar",
+      "toastBulkDeleted": "{count} conversas excluídas",
+      "toastBulkDeleteFailed": "Falha ao excluir conversas: {reason}"
     },
     "messageThread": {
       "backToConversations": "Voltar às conversas",
@@ -182,7 +201,21 @@
       "sendTemplateFailed": "Falha ao enviar o modelo: {reason}",
       "waitForSending": "Aguarde a mensagem terminar de ser enviada",
       "reactionFailed": "Falha na reação: {reason}",
-      "assignmentUpdateFailed": "Falha ao atualizar a atribuição"
+      "assignmentUpdateFailed": "Falha ao atualizar a atribuição",
+      "blockContact": "Bloquear contato",
+      "unblockContact": "Desbloquear contato",
+      "blockedToast": "Contato bloqueado",
+      "unblockedToast": "Contato desbloqueado",
+      "blockFailed": "Falha ao atualizar o bloqueio: {reason}",
+      "blockedHint": "Este contato está bloqueado. Desbloqueie para enviar mensagens.",
+      "unblock": "Desbloquear",
+      "deleteChat": "Excluir conversa",
+      "deleteChatTitle": "Excluir esta conversa?",
+      "deleteChatDesc": "Isso exclui permanentemente a conversa com {name} e todas as mensagens. O contato é mantido.",
+      "deleteChatConfirm": "Excluir conversa",
+      "deleteChatSuccess": "Conversa excluída",
+      "deleteChatFailed": "Falha ao excluir a conversa: {reason}",
+      "cancel": "Cancelar"
     },
     "sessionTimer": {
       "expired": "Expirada",

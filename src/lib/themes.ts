@@ -19,6 +19,11 @@ export const THEME_IDS = [
   "cobalt",
   "amber",
   "rose",
+  "teal",
+  "indigo",
+  "fuchsia",
+  "lime",
+  "orange",
 ] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
@@ -96,6 +101,36 @@ export const THEMES: ReadonlyArray<ThemeMeta> = [
     name: "Rose",
     tagline: "Bold and modern — D2C, creator-economy, lifestyle.",
     swatch: "oklch(0.645 0.22 16)",
+  },
+  {
+    id: "teal",
+    name: "Teal",
+    tagline: "Fresh and dependable — calm without feeling corporate.",
+    swatch: "oklch(0.6 0.13 195)",
+  },
+  {
+    id: "indigo",
+    name: "Indigo",
+    tagline: "Deep and focused — a quieter, more serious blue.",
+    swatch: "oklch(0.56 0.22 275)",
+  },
+  {
+    id: "fuchsia",
+    name: "Fuchsia",
+    tagline: "Expressive and energetic — for brands that stand out.",
+    swatch: "oklch(0.63 0.25 330)",
+  },
+  {
+    id: "lime",
+    name: "Lime",
+    tagline: "Bright and optimistic — high energy, high contrast.",
+    swatch: "oklch(0.72 0.19 128)",
+  },
+  {
+    id: "orange",
+    name: "Orange",
+    tagline: "Warm and bold — confident without the red alarm.",
+    swatch: "oklch(0.68 0.2 45)",
   },
 ];
 

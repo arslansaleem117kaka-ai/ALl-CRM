@@ -27,6 +27,7 @@ import type {
 } from '@/lib/dashboard/types'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
+import { FreeServiceCard } from '@/components/dashboard/free-service-card'
 import { SkeletonCard } from '@/components/dashboard/skeleton'
 import { EmptyState } from '@/components/dashboard/empty-state'
 import { QuickActions } from '@/components/dashboard/quick-actions'
@@ -174,7 +175,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         {metricsLoading ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         ) : metricsError || !metrics ? (
@@ -232,6 +233,7 @@ export default function DashboardPage() {
             />
           </>
         )}
+        <FreeServiceCard />
       </div>
 
       {/* Quick actions */}

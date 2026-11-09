@@ -27,10 +27,22 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Ban,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +66,7 @@ import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { renderTemplateBody } from "@/lib/whatsapp/template-body";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
+import { isContactBlocked } from "@/lib/contacts/blocked";
 import { toast } from "sonner";
 
 interface ReplyDraft {
@@ -106,6 +119,13 @@ interface MessageThreadProps {
    */
   contactPanelOpen?: boolean;
   onToggleContactPanel?: () => void;
+  /**
+   * Fired after this conversation (and its messages) is deleted. The
+   * page clears the active thread and refreshes the list. Optional so
+   * existing callers keep working; the delete action only renders when
+   * it is wired up.
+   */
+  onConversationDeleted?: (conversationId: string) => void;
 }
 
 function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslations>): string {
@@ -164,6 +184,7 @@ export function MessageThread({
   onRefresh,
   contactPanelOpen,
   onToggleContactPanel,
+  onConversationDeleted,
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
@@ -198,6 +219,75 @@ export function MessageThread({
       refreshTimerRef.current = null;
     }, 700);
   }, [isRefreshing, onRefresh]);
+
+  // Block state is mirrored locally so the button/banner react instantly,
+  // without waiting for the contact_tags realtime event to come back.
+  // The override is keyed by contact id, so switching threads falls back
+  // to the tag data fetched with the conversation.
+  const [blockOverride, setBlockOverride] = useState<{
+    contactId: string;
+    blocked: boolean;
+  } | null>(null);
+  const [blockSaving, setBlockSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const contactId = contact?.id;
+  const isBlocked = contactId
+    ? blockOverride?.contactId === contactId
+      ? blockOverride.blocked
+      : isContactBlocked(contact?.tags)
+    : false;
+
+  const handleToggleBlock = useCallback(async () => {
+    if (!contactId || blockSaving) return;
+    setBlockSaving(true);
+    try {
+      const res = await fetch(`/api/contacts/${contactId}/block`, {
+        method: isBlocked ? "DELETE" : "POST",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || `HTTP ${res.status}`);
+      }
+      const nextBlocked = !isBlocked;
+      setBlockOverride({ contactId, blocked: nextBlocked });
+      toast.success(nextBlocked ? t("blockedToast") : t("unblockedToast"));
+      // Refresh the list so the Blocked tag badge (and the contact panel)
+      // reflect the change even if realtime misses the join-row event.
+      onRefresh?.();
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "network error";
+      toast.error(t("blockFailed", { reason }));
+    } finally {
+      setBlockSaving(false);
+    }
+  }, [contactId, isBlocked, blockSaving, onRefresh, t]);
+
+  const handleDeleteConversation = useCallback(async () => {
+    if (!conversation || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/inbox/conversations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [conversation.id] }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || `HTTP ${res.status}`);
+      }
+      toast.success(t("deleteChatSuccess"));
+      setDeleteOpen(false);
+      onConversationDeleted?.(conversation.id);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "network error";
+      toast.error(t("deleteChatFailed", { reason }));
+    } finally {
+      setDeleting(false);
+    }
+  }, [conversation, deleting, onConversationDeleted, t]);
+
   const [replyTo, setReplyTo] = useState<ReplyDraft | null>(null);
   // Which attachment the media viewer is showing. Lives here rather than in
   // the bubble so the viewer can page through every image/video in the
@@ -208,7 +298,6 @@ export function MessageThread({
     conversationId: string;
     messageId: string;
   } | null>(null);
-
   // Profiles are bounded by RLS to rows the current user is allowed to
   // see — today that's just the current user, but the dropdown keeps the
   // shape ready for shared-team workspaces without a refactor.
@@ -991,6 +1080,41 @@ export function MessageThread({
             </button>
           )}
 
+          {/* Block / unblock the contact. Blocking keeps the history
+              visible but stops outgoing messages (enforced server-side). */}
+          <button
+            type="button"
+            onClick={handleToggleBlock}
+            disabled={blockSaving}
+            aria-label={isBlocked ? t("unblockContact") : t("blockContact")}
+            title={isBlocked ? t("unblockContact") : t("blockContact")}
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted disabled:opacity-60",
+              isBlocked
+                ? "text-red-400 hover:text-red-300"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {blockSaving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Ban className="h-3.5 w-3.5" />
+            )}
+          </button>
+
+          {/* Delete this conversation (and its messages). */}
+          {onConversationDeleted && (
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              aria-label={t("deleteChat")}
+              title={t("deleteChat")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-red-400"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+
           {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
@@ -1176,17 +1300,66 @@ export function MessageThread({
         }}
       />
 
-      {/* Composer */}
-      <MessageComposer
-        conversationId={conversation.id}
-        sessionExpired={sessionInfo.expired}
-        onSend={handleSend}
-        onSendMedia={handleSendMedia}
-        onSendInteractive={handleSendInteractive}
-        onOpenTemplates={handleOpenTemplates}
-        replyTo={replyTo}
-        onClearReply={() => setReplyTo(null)}
-      />
+      {/* Composer — replaced by a banner while the contact is blocked. */}
+      {isBlocked ? (
+        <div className="border-t border-border bg-card p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-500/10 px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <Ban className="h-4 w-4 shrink-0 text-red-400" />
+              <p className="text-xs text-red-400">{t("blockedHint")}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-red-400 hover:text-red-300"
+              onClick={handleToggleBlock}
+              disabled={blockSaving}
+            >
+              {blockSaving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+              {t("unblock")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <MessageComposer
+          conversationId={conversation.id}
+          sessionExpired={sessionInfo.expired}
+          onSend={handleSend}
+          onSendMedia={handleSendMedia}
+          onSendInteractive={handleSendInteractive}
+          onOpenTemplates={handleOpenTemplates}
+          replyTo={replyTo}
+          onClearReply={() => setReplyTo(null)}
+        />
+      )}
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("deleteChatTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("deleteChatDesc", { name: displayName })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleting}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConversation}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {t("deleteChatConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <TemplatePicker
         open={templateModalOpen}

@@ -20,7 +20,6 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
-import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -594,6 +593,24 @@ function InboxPageInner() {
   }, [router]);
 
 
+  const handleConversationsDeleted = useCallback(
+    (ids: string[]) => {
+      const deleted = new Set(ids);
+      setConversations((prev) => prev.filter((c) => !deleted.has(c.id)));
+
+      if (activeConversation && deleted.has(activeConversation.id)) {
+        setActiveConversation(null);
+        setActiveContact(null);
+        setMessages([]);
+        autoSelectedForDeepLinkRef.current = null;
+        router.replace("/inbox", { scroll: false });
+      }
+
+      setResyncToken((n) => n + 1);
+    },
+    [activeConversation, router],
+  );
+
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
   }, []);
@@ -682,6 +699,7 @@ function InboxPageInner() {
             conversations={conversations}
             onConversationsLoaded={handleConversationsLoaded}
             resyncToken={resyncToken}
+            onConversationsDeleted={handleConversationsDeleted}
           />
         </div>
 
@@ -715,6 +733,7 @@ function InboxPageInner() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            onConversationDeleted={(id) => handleConversationsDeleted([id])}
           />
         </div>
 

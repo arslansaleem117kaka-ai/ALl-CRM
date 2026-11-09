@@ -132,6 +132,14 @@
     },
     "emptyState": {
       "title": "Aún no hay datos suficientes"
+    },
+    "freeService": {
+      "title": "Mensajes de servicio gratuitos",
+      "subtitle": "Mensajes salientes sin plantilla desde {date}",
+      "reset": "Reiniciar contador",
+      "resetSuccess": "Contador reiniciado",
+      "customWindow": "Inicio personalizado",
+      "loadError": "No se pudo cargar el recuento de mensajes."
     }
   },
   "Inbox": {
@@ -151,7 +159,18 @@
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
       "noMessagesYet": "Aún no hay mensajes",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "selectChats": "Seleccionar chats",
+      "cancelSelection": "Cancelar selección",
+      "selectAll": "Seleccionar todos",
+      "clearSelection": "Borrar selección",
+      "selectedCount": "Seleccionados: {count}",
+      "deleteSelected": "Eliminar seleccionados",
+      "deleteBulkTitle": "¿Eliminar los chats seleccionados?",
+      "deleteBulkDesc": "Esto elimina permanentemente {count} chats y todos sus mensajes. Los contactos se conservan.",
+      "cancel": "Cancelar",
+      "toastBulkDeleted": "{count} chats eliminados",
+      "toastBulkDeleteFailed": "No se pudieron eliminar los chats: {reason}"
     },
     "messageThread": {
       "backToConversations": "Volver a las conversaciones",
@@ -182,7 +201,21 @@
       "sendTemplateFailed": "Error al enviar la plantilla: {reason}",
       "waitForSending": "Espera a que el mensaje termine de enviarse",
       "reactionFailed": "Error en la reacción: {reason}",
-      "assignmentUpdateFailed": "Error al actualizar la asignación"
+      "assignmentUpdateFailed": "Error al actualizar la asignación",
+      "blockContact": "Bloquear contacto",
+      "unblockContact": "Desbloquear contacto",
+      "blockedToast": "Contacto bloqueado",
+      "unblockedToast": "Contacto desbloqueado",
+      "blockFailed": "No se pudo actualizar el bloqueo: {reason}",
+      "blockedHint": "Este contacto está bloqueado. Desbloquéalo para enviar mensajes.",
+      "unblock": "Desbloquear",
+      "deleteChat": "Eliminar chat",
+      "deleteChatTitle": "¿Eliminar este chat?",
+      "deleteChatDesc": "Esto elimina permanentemente la conversación con {name} y todos sus mensajes. El contacto se conserva.",
+      "deleteChatConfirm": "Eliminar chat",
+      "deleteChatSuccess": "Chat eliminado",
+      "deleteChatFailed": "No se pudo eliminar el chat: {reason}",
+      "cancel": "Cancelar"
     },
     "sessionTimer": {
       "expired": "Expirada",
@@ -1036,7 +1069,7 @@
       "kindWait": "Espera",
       "kindAction": "Acción",
       "delete": "Eliminar",
-"config": {
+      "config": {
         "messageText": "Texto del mensaje",
         "placeholderMessageText": "¡Hola! Gracias por escribirnos…",
         "mediaAttachment": "Adjunto (opcional)",
@@ -2094,7 +2127,7 @@
     "buttonTypeUrl": "URL",
     "urlPlaceholder": "https://example.com"
   },
-"MediaUpload": {
+  "MediaUpload": {
     "uploading": "Subiendo…",
     "tooLarge": "El archivo supera el límite de {limit} MB.",
     "remove": "Quitar archivo"
